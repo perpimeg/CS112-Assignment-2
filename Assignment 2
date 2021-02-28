@@ -1,0 +1,243 @@
+#Question 1
+#1000 outcome observations of the albedo in different conditions
+#w = white surface(reflection) (1-100%)
+#s = solar radiation https://earth.gsfc.nasa.gov/climate/research/solar-radiation
+#a = albedo effect (y)
+#r = stochastic component rnorm(1000)
+
+#Step 1
+reflection <- runif(1000, min = 0, max = 100) #reflection can be anywhere from 0 to 100%
+solar_radiation <- rnorm(1000, mean = 30, sd = 2) #solar radiation averages 30 degrees Celsius
+randomness <- rnorm(1000) #stochastic randomness (irreducible error)
+albedo <- (solar_radiation / reflection) + randomness #albedo is defined simply by this ratio
+summary(albedo)
+
+#Step 3
+regression_question_1 <- lm(albedo ~ reflection + solar_radiation)
+summary(regression_question_1)
+
+#Step 4
+library(arm)
+#install.packages("MASS")
+library(MASS)
+
+set.seed(123)
+
+sim_results <- sim(regression_question_1, n.sims = 10000)
+sim_results@coef
+
+x <- sim_results@coef[,2] #second column = reflection coefficient
+quantile(sim_results@coef[,2], probs = c(0.025,0.975)) #confidence intervals
+
+y <- sim_results@coef[,3] #third column = solar radiation coefficient
+quantile(sim_results@coef[,3], probs = c(0.025,0.975)) #confidence intervals
+
+#Step 5
+z <- (1*x) + (y*-2) 
+quantile(z, probs = c(0.025,0.975)) 
+
+############################################################
+
+#Question 2
+age <- c(1:10) #creates ages of kids 1-10
+dependency_on_parent <- c(10,9,9,8,7,6,7,6,6,7) #10-high, 0-low
+plot(age, dependency_on_parent, main="Children's Dependence on Parents Through Childhood",xlab="Age of Child (Years)", ylab="Dependency on Parent (0=low,10=high)") #plots the two variables
+abline(lm(age~dependency_on_parent)) #creates regression line
+
+age2 <- c(1:11) #creates ages of kids 1-11 (the addition of the 11th kid as an outlier)
+dependency_on_parent2 <- c(0,10,9,9,8,7,6,7,6,6,7) #10-high, 0-low
+plot(age2, dependency_on_parent2, main="Children's Dependence on Parents Through Childhood",xlab="Age of Child (Years)", ylab="Dependency on Parent (0=low,10=high)") #plots the two variables
+abline(lm(age2~dependency_on_parent2)) #creates regression line
+
+
+###########################################################
+
+#Question 3
+#install.packages("janitor")
+library(janitor)
+
+#Step 1
+austin_data <- read.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vSkTCmwV9IT9eUqaYZjvZa4ldGl6KtNXXyZQv7WJUcNkORERryRKK2iUNBq8XoQw1PFiSQFQv2H-YSc/pub?gid=0&single=true&output=csv")
+head(austin_data)
+  
+#Step 1.1
+data_no_NAs <- austin_data[!apply(austin_data, 1, function(x) any(x=="")),] #removes NAs
+
+#Step 1.2
+dog_data_only <- data_no_NAs[data_no_NAs$animal_type == "Dog",] #removes all entries except for dogs
+
+#Step 1.3
+make_clean_names(colnames(dog_data_only)) #makes the column_names lower case
+
+#Step 1.4
+no_euthanasiarequests <- dog_data_only[dog_data_only$intake_type != "Euthanasia Request",]
+#removes all entries with intake type of Euthanansia
+
+#Step 1.5
+conditionchange_1 <- no_euthanasiarequests
+conditionchange_1[conditionchange_1 == "Normal"] <- "Other" #renames Normal as Other
+conditionchange_1[conditionchange_1 == "Injured"] <- "Other" #renames Injured as Other
+conditionchange_1[conditionchange_1 == "Sick"] <- "Other" #renames Sick as Other
+conditionchange_1[conditionchange_1 == "Pregnant"] <- "Mother" #renames Pregnant as Mother
+conditionchange_1[conditionchange_1 == "Nursing"] <- "Mother" #renames Nursing as Mother
+conditionchange_1
+
+final_data <- conditionchange_1
+final_data
+
+#Step 2/3
+austin_regression <- lm(time_in_shelter_days ~ intake_type + intake_condition + age_upon_intake_.years., data=final_data)
+summary(austin_regression)
+
+#Step 3 #computing R-squared
+anova(austin_regression)
+#add sum of square errors from intake_type, intake_condition, and age_upon_intake.years.
+111167+12601+536520 #=660288
+
+#divide sum of square error from sum of square error and mean residual square error (=43761610) 
+660288 / (660288+43761610) #=0.01486402
+
+#Step 4 
+ages = c(0.1,0.5,1,2,3,5,7,10,15,18,20)
+
+numerical_intake_type <- as.numeric(as.factor(final_data$intake_type))
+numerical_intake_type
+#numerical_intake_type: stray = 4
+dummy_numerical_intake_type <- subset(numerical_intake_type, numerical_intake_type==4)
+
+numerical_intake_condition <- as.numeric(as.factor(final_data$intake_condition))
+numerical_intake_condition
+#numerical_intake_condition: normal = 4
+dummy_numerical_intake_condition <- subset(numerical_intake_condition, numerical_intake_condition==4)
+
+step_four_regression <- glm(time_in_shelter_days ~ dummy_numerical_intake_condition + dummy_numerical_intake_type + age_upon_intake_.years., data=final_data)
+sim_object <- sim(step_four_regression, n.sims = 1000) #generate 100 sets of coefficients
+predictions <- predict(sim_object,ages)
+
+quantile(predictions, probs = c(0.025,0.975))
+plot(predictions, main= "Effect of age upon intake on the length of stay", xlab="time in shelter", ylab="age")
+
+####################################################
+
+#Question 4
+# creating the following simulated toy data set
+set.seed(1234)
+
+# ed1 is the value of spend on education prior to the experiment
+ed1 <- round(runif(10000, min = 8, max = 20))
+mean(ed1)
+
+# treat is an indicator of RANDOM ASSIGNMENT to treatment vs. control (RCT)
+# 5000 control units and 5000 treated units
+treat <- c(rep(0, 5000), rep(1, 5000))
+
+# here's what the error term looks like
+hist(rnorm(10000, mean = 0, sd = 3))
+
+error_term <- rnorm(10000, mean = 0, sd = 3)
+
+# let us assume the data-generating process below (no intercept)
+ed2 <- 1*ed1 + 5*treat + error_term
+
+# the 'gain score' or 'diff' in educ spend across periods
+ed3 <- ed2 - ed1
+
+# plot the data
+plot(ed1[1:5000], ed2[1:5000], col = "blue") #no treatment#####
+points(ed1[5001:10000] + 0.25, ed2[5001:10000], col = "red") #treamtnet####
+
+# confirm the avg tmt effect is as expected
+mean(ed2[5001:10000] - mean(ed2[1:5000]))
+
+# consider various regressions--note: here, we know correct model and the right answer
+lm1 <- lm(ed2 ~ treat) 
+lm1
+lm2 <- lm(ed2 ~ treat + ed1) 
+lm2
+lm3 <- lm(ed3 ~ treat)
+lm3
+lm4 <- lm(ed3 ~ treat + ed2) 
+lm4
+lm5 <- lm(ed2 ~ treat + ed1 + I(treat*ed1))
+lm5
+
+################################################
+
+#Question 5
+
+final_data_2 <- final_data
+
+final_data_2$outcome_type
+identify <- as.numeric(as.factor(final_data_2$outcome_type))
+
+#based on the values above, I matched the categorical value with the dummy value:
+# 1 = adoption
+# 2 = dead
+# 3 = euthanasia
+# 4 = missing
+# 5 = disposal
+# 6 = transfer
+
+length(identify[identify == 1]) #number of adoptions = 2425
+length(identify[identify == 2]) #number of dead = 132
+length(identify[identify == 3]) #number of euthanasia = 1350
+length(identify[identify == 4]) #number of missing = 11
+length(identify[identify == 5]) #number of disposal = 1
+length(identify[identify == 6]) #number of transfer = 9674
+
+## add new values that could effect live release
+identify2 <- as.numeric(as.factor(final_data_2$color))
+length(identify2[identify2 == 181]) #tan is dummy variable 181. there are 675 occurrences
+
+identify3 <- as.numeric(as.factor(final_data_2$breed)) 
+length(identify3[identify3 == 833]) #pug is dummy variable 833. there are 19 occurrences
+
+final_data_2$live_release <- ifelse(identify == 1 | identify == 6 | identify2 == 181 | identify3 == 833, 1,0)
+final_data_2$live_release ## ^creates new column of live release with criteria that affects live release
+
+length(final_data_2$live_release[final_data_2$live_release == 1]) #size of live release
+
+length(final_data_2$live_release)
+
+#Step 2
+#install.packages("caTools")
+#install.packages("caret")
+library(caret)
+library(caTools)
+data1 <- sample.split(final_data_2,SplitRatio = 0.8) #split data into 20/80
+train <- subset(final_data_2,data1==TRUE) #80%
+test <- subset(final_data_2,data1==FALSE) #20%
+
+#Step 3
+training_regression2 <- glm(live_release ~ intake_type + intake_condition + age_upon_intake_.years., data = train, family = binomial)
+summary(training_regression2)
+confint(training_regression2)
+
+#Step 4
+predicted_vals <- predict(training_regression2, newdata=test, type="response")
+predicted_glm = predicted_vals > 0.5
+predicted_glm[predicted_glm == TRUE] <- 1 
+predicted_glm[predicted_glm == FALSE] <- 0 
+confusion_matrix <- table(predicted_glm, test$live_release)
+confusion_matrix
+sum(diag(confusion_matrix))/sum(confusion_matrix)*100
+#89.15
+
+#Step 5
+#set threshold to 0.4
+predicted_glm2 = predicted_vals > 0.4
+predicted_glm2[predicted_glm2 == TRUE] <- 1 
+predicted_glm2[predicted_glm2 == FALSE] <- 0 
+confusion_matrix2 <- table(predicted_glm2, test$live_release)
+confusion_matrix2
+sum(diag(confusion_matrix2))/sum(confusion_matrix2)*100
+#89.22
+
+#set threshold to 0.6
+predicted_glm3 = predicted_vals > 0.6
+predicted_glm3[predicted_glm3 == TRUE] <- 1 
+predicted_glm3[predicted_glm3 == FALSE] <- 0 
+confusion_matrix3 <- table(predicted_glm3, test$live_release)
+confusion_matrix3
+sum(diag(confusion_matrix3))/sum(confusion_matrix3)*100
+#89.11
